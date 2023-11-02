@@ -65,6 +65,27 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+async def get_body(request: Request):
+    content_type = request.headers.get('Content-Type')
+    if content_type is None:
+        raise HTTPException(status_code=400, detail='No Content-Type provided!')
+    elif content_type == 'application/json':
+        try:
+            return await request.json()
+        except JSONDecoderError:
+            raise HTTPException(status_code=400, detail='Invalid JSON data')
+    elif (content_type == 'application/x-www-form-urlencoded' or
+          content_type.startswith('multipart/form-data')):
+        try:
+            return await request.form()
+        except Exception:
+            raise HTTPException(status_code=400, detail='Invalid Form data')
+    else:
+        raise HTTPException(status_code=400, detail='Content-Type not supported!')
+    
+    
+    
+    
 @app.get("/")
 def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request} )
@@ -79,7 +100,9 @@ async def get_train_data(request: Request):
         doc.update({'id':id})
         train = TrainOut(**doc)
         trains.append(train)
+        print(trains)
     if not trains: return{"msg":"no records found"}
+    print("train data received")
     return templates.TemplateResponse("traintable.html", {"request": request, "headings": headings, "data": trains}) 
 
 @app.get('/train/{id}',response_model=Train)
@@ -91,6 +114,7 @@ async def get_train_data_byid(id: str):
 
 @app.post('/train')
 async def add_train_data(
+    body = Depends(get_body),
     date: str = Form(...),
     user: str = Form(...),
     pushup: int = Form(...),
@@ -102,10 +126,10 @@ async def add_train_data(
     kick_on_chair: int = Form(...),
     spreading_thigh: int = Form(...)
    ):
-    date1 = datetime.now().date()
+    #date1 = datetime.now().date()
     print(date)
     data = {
-        "date": date1,
+        "date": date,
         "user": user,
         "pushup": pushup,
         "stomach": stomach,
@@ -118,6 +142,7 @@ async def add_train_data(
     }  
 
     doc = dict(data)
+    print(doc)
     result = await train_collection.insert_one(doc)
     if not result: return("insetion error")
     
